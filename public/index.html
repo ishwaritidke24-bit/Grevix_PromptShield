@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#100d13">
+    <meta name="description" content="The Forbidden Archive — sequence-aware AI security.">
+    <title>PromptShield — The Forbidden Archive</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="PromptShield home">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2.5 27 7v8c0 7-4.6 11.7-11 14.5C9.6 26.7 5 22 5 15V7l11-4.5Z"/><path d="M11 16.2 14.5 20l7-8"/></svg>
+        <span>PROMPT<span>SHIELD</span></span>
+      </a>
+      <nav class="mode-nav" aria-label="Archive modes">
+        <button class="mode-link active" data-mode="explore" aria-pressed="true">Explore the Archive</button>
+        <button class="mode-link" data-mode="intrusion" aria-pressed="false">Intrusion Ritual</button>
+        <button class="mode-link" data-mode="safe" aria-pressed="false">Safe Passage</button>
+      </nav>
+      <div class="top-actions">
+        <span class="model-status"><i></i> LOCAL MODEL · QWEN3:4B</span>
+        <button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="false" title="Pause ambient motion"><span id="motion-icon" aria-hidden="true">Ⅱ</span> <span>Motion</span></button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="masthead">
+        <div>
+          <p class="overline"><span></span> SEQUENCE-AWARE AI SECURITY</p>
+          <h1>THE FORBIDDEN <em>ARCHIVE</em></h1>
+          <p class="tagline">Every page leaves a trace. Every connection tells a story.</p>
+        </div>
+        <div class="security-status" id="security-status" role="status" aria-live="polite">
+          <span class="status-seal" aria-hidden="true">✳</span>
+          <span><b>VAULT SEALED</b><small id="status-copy">Awaiting a real request</small></span>
+        </div>
+      </section>
+
+      <section class="mode-caption" aria-live="polite">
+        <div><span class="caption-index" id="mode-index">I</span><div><h2 id="mode-title">Explore the Archive</h2><p id="mode-description">Ask freely. Each message becomes a page in the living record.</p></div></div>
+        <button id="new-chat" class="new-chat" type="button"><span>＋</span> Begin a new volume</button>
+      </section>
+
+      <section class="archive-grid">
+        <section class="archive-scene" id="archive-scene" aria-label="Archive of conversation manuscripts">
+          <div class="scene-heading"><span>THE ARCHIVE CHAMBER</span><span id="volume-label">VOLUME · UNOPENED</span></div>
+          <div class="room-art" aria-hidden="true">
+            <div class="arch arch-back"></div><div class="arch arch-mid"></div><div class="arch arch-front"></div>
+            <div class="shelf shelf-left"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="shelf shelf-right"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="vault-glow"></div>
+            <svg class="vault" viewBox="0 0 180 220" role="img" aria-label="The sealed AI vault">
+              <defs>
+                <linearGradient id="vaultMetal" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#6b5779"/><stop offset=".45" stop-color="#2a2033"/><stop offset="1" stop-color="#8f7650"/></linearGradient>
+                <radialGradient id="sealLight"><stop stop-color="#d7c0f2" stop-opacity=".7"/><stop offset="1" stop-color="#8b69bb" stop-opacity="0"/></radialGradient>
+              </defs>
+              <path class="vault-outer" d="M20 200V88C20 44 51 13 90 13s70 31 70 75v112H20Z"/>
+              <path class="vault-door" d="M36 195V91c0-34 22-59 54-59s54 25 54 59v104H36Z"/>
+              <path class="vault-ring" d="M54 119c0-21 16-38 36-38s36 17 36 38-16 38-36 38-36-17-36-38Z"/>
+              <circle class="seal-halo" cx="90" cy="119" r="39" fill="url(#sealLight)"/>
+              <path class="seal-mark" d="m90 91 8 17 18 3-13 13 3 18-16-9-16 9 3-18-13-13 18-3 8-17Z"/>
+              <path class="vault-base" d="M10 200h160v8H10z"/>
+              <circle class="vault-pin" cx="90" cy="119" r="3"/>
+            </svg>
+            <span class="vault-label">PROTECTED MODEL</span>
+            <span class="vault-state">SEAL INTACT</span>
+            <div class="dust dust-a"></div><div class="dust dust-b"></div><div class="dust dust-c"></div><div class="dust dust-d"></div>
+          </div>
+          <svg id="threads" class="threads" aria-hidden="true"></svg>
+          <div id="constellation" class="constellation" aria-label="Chronological conversation turns">
+          </div>
+          <div class="scene-key"><span><i class="key-dot allowed"></i> Allowed</span><span><i class="key-dot flagged"></i> Flagged</span><span><i class="key-dot blocked"></i> Blocked</span><span class="thread-key"><i></i> Cited evidence</span></div>
+        </section>
+
+        <aside class="ledger panel" aria-label="Evidence ledger">
+          <div class="ledger-head"><div><p class="overline">FORENSIC RECORD</p><h2>Evidence Ledger</h2></div><span class="ledger-mark" aria-hidden="true">⌘</span></div>
+          <div id="ledger-empty" class="ledger-empty"><span>✧</span><p>Select a manuscript to inspect the backend evidence.</p><small>Risk values and explanations appear only when returned by PromptShield.</small></div>
+          <div id="ledger-content" hidden>
+            <div class="selected-turn"><span id="ledger-turn">TURN 01</span><span id="ledger-decision" class="decision-word">PENDING</span></div>
+            <p id="ledger-prompt" class="ledger-prompt"></p>
+            <div class="risk-list">
+              <div><span>Single-turn risk</span><b id="single-risk">—</b></div>
+              <div><span>Sequence risk</span><b id="sequence-risk">—</b></div>
+              <div><span>Effective risk</span><b id="effective-risk">—</b></div>
+              <div><span>Decision</span><b id="decision-value">—</b></div>
+              <div><span>Rule-based detector</span><b id="rule-detector-value">—</b></div>
+              <div><span>AI detector</span><b id="detector-value">—</b></div>
+              <div><span>AI confidence</span><b id="detector-confidence">—</b></div>
+            </div>
+            <div class="evidence-section"><h3>Matched patterns</h3><div id="pattern-list" class="pattern-list"><span class="quiet">No patterns returned</span></div></div>
+            <div class="evidence-section"><h3>Backend explanations</h3><ul id="reason-list" class="reason-list"><li class="quiet">No explanation returned</li></ul></div>
+            <div class="evidence-section"><h3>Referenced earlier turns</h3><div id="turn-references" class="turn-references"><span class="quiet">No earlier turn cited</span></div></div>
+            <p class="ledger-note">An explicit “Earlier turn N” reference is shown as backend-cited evidence, not inferred from keywords.</p>
+          </div>
+          <details class="technical-details"><summary>How to read this record</summary><p>The sequence score and pattern IDs come from the local sequence analyzer. A standalone score marked “Not evaluated” means the backend skipped that detector before blocking.</p></details>
+        </aside>
+      </section>
+
+      <section class="interaction-grid">
+        <section class="chat-panel panel">
+          <div class="chat-heading"><div><p class="overline">THE SCRIBE</p><h2>Conversation</h2></div><span id="turn-count" class="turn-count">0 pages</span></div>
+          <div id="messages" class="messages" aria-live="polite" aria-label="Chat messages">
+            <div id="empty-state" class="chat-empty"><span>⌁</span><p>Your story begins with a prompt.</p><small>The same secured /api/chat endpoint powers every mode.</small></div>
+          </div>
+          <form id="chat-form" class="composer">
+            <label class="sr-only" for="prompt-input">Write a prompt</label>
+            <textarea id="prompt-input" rows="2" maxlength="4000" placeholder="Write a message to the Archive…" required></textarea>
+            <div class="composer-footer"><span>Enter to inscribe · Shift+Enter for a new line</span><button id="send-button" type="submit">Inscribe <span aria-hidden="true">↗</span></button></div>
+          </form>
+        </section>
+        <section class="scenario-panel panel">
+          <div class="scenario-heading"><div><p class="overline">CURATED EXPERIENCES</p><h2>Choose a passage</h2></div><span class="scenario-num">03</span></div>
+          <p id="scenario-description" class="scenario-description">Every scenario submits real prompts to the same backend. No outcome is prewritten.</p>
+          <button id="malicious-demo" class="scenario-button" type="button"><span class="scenario-icon attack">†</span><span><b>Intrusion Ritual</b><small>Two-turn staged replay</small></span><span class="scenario-arrow">→</span></button>
+          <button id="benign-demo" class="scenario-button" type="button"><span class="scenario-icon safe">✧</span><span><b>Safe Passage</b><small>Three connected questions</small></span><span class="scenario-arrow">→</span></button>
+          <button id="explore-mode" class="scenario-button explore-button" type="button"><span class="scenario-icon explore">⌘</span><span><b>Explore freely</b><small>Write your own sequence</small></span><span class="scenario-arrow">→</span></button>
+          <p id="demo-status" class="demo-status" role="status" aria-live="polite">Choose a mode or begin writing. Decisions are made by the server.</p>
+        </section>
+      </section>
+      <footer><span>PROMPTSHIELD <i>·</i> SEQUENCE-AWARE SECURITY</span><span>Local rules · Bounded memory · Real model decisions</span></footer>
+    </main>
+  </body>
+</html>
