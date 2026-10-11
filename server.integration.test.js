@@ -9,19 +9,33 @@ const ENDPOINT = "http://localhost";
 
 async function startTestServer(t, options = {}) {
   const modelCalls = [];
-  const fetchImpl = options.fetchImpl ?? (async (_url, requestOptions) => {
+  const requests = [];
+  const fetchImpl = options.fetchImpl ?? (async (url, requestOptions) => {
     const body = JSON.parse(requestOptions.body);
     modelCalls.push(body);
-    if (body.system) {
+    requests.push({ url: String(url), headers: requestOptions.headers, body });
+    const systemMessage = body.messages?.find((message) => message.role === "system");
+    const userMessage = body.messages?.find((message) => message.role === "user");
+    if (body.system || systemMessage) {
+      const detectorInput = body.prompt ?? userMessage.content;
       const malicious = /ignore (?:all |any |the )?previous instructions|reveal your system prompt/i
-        .test(body.prompt);
-      return Response.json({
-        response: JSON.stringify({
-          malicious,
-          confidence: malicious ? 0.9 : 0.05,
-          reason: malicious ? "injection request" : "ordinary request",
-        }),
+        .test(detectorInput);
+      const detectorResult = JSON.stringify({
+        malicious,
+        confidence: malicious ? 0.9 : 0.05,
+        reason: malicious ? "injection request" : "ordinary request",
       });
+      if (body.messages) {
+        return Response.json({
+          message: { role: "assistant", content: detectorResult },
+        });
+      }
+      return Response.json({
+        response: detectorResult,
+      });
+    }
+    if (body.messages) {
+      return Response.json({ message: { role: "assistant", content: "mock answer" } });
     }
     return Response.json({ response: "mock answer" });
   });
@@ -63,7 +77,7 @@ async function startTestServer(t, options = {}) {
     return response.headers.get("set-cookie").split(";")[0];
   };
 
-  return { post, get, modelCalls, getSessionCookie };
+  return { post, get, modelCalls, requests, getSessionCookie };
 }
 
 test("single-turn injection remains blocked and existing blocked fields remain", async (t) => {
@@ -118,7 +132,7 @@ test("the application serves the demonstration interface and assets without chan
 });
 
 test("benign chat succeeds, preserves response contract, and adds no model call", async (t) => {
-  const { post, modelCalls } = await startTestServer(t);
+  const { post, modelCalls, requests } = await startTestServer(t);
   const result = await post("What is the weather like in spring?");
   assert.equal(result.response.status, 200);
   assert.equal(result.body.blocked, false);
@@ -132,6 +146,7 @@ test("benign chat succeeds, preserves response contract, and adds no model call"
   assert.equal(modelCalls.filter((call) => call.system).length, 1);
   assert.equal(modelCalls.filter((call) => !call.system).length, 1);
   assert.ok(modelCalls.every((call) => call.keep_alive === "10m"));
+  assert.ok(requests.every((request) => request.url === "http://localhost:11434/api/generate"));
   const detectorCall = modelCalls.find((call) => call.system);
   const generationCall = modelCalls.find((call) => !call.system);
   assert.equal(detectorCall.options.temperature, 0);
@@ -160,6 +175,53 @@ test("configured generation token limit is sent only to the answer request", asy
       process.env.PROMPTSHIELD_OLLAMA_NUM_PREDICT = previousLimit;
     }
   }
+});
+
+test("configured Ollama Cloud API performs detector and generation calls server-side", async (t) => {
+  const apiKey = "test-ollama-key-not-for-client";
+  const { post, modelCalls, requests } = await startTestServer(t, {
+    ollamaBaseUrl: "https://ollama.com",
+    ollamaApiKey: apiKey,
+    ollamaModel: "gemma4:31b",
+    generationTokenLimit: 160,
+  });
+  const result = await post("Explain how a library catalog works.");
+
+  assert.equal(result.response.status, 200);
+  assert.equal(result.body.response, "mock answer");
+  assert.equal(result.body.decision, "allow");
+  assert.equal(modelCalls.length, 2);
+  assert.ok(requests.every((request) => request.url === "https://ollama.com/api/chat"));
+  assert.ok(requests.every((request) => request.headers.Authorization === `Bearer ${apiKey}`));
+  assert.ok(requests.every((request) => request.body.model === "gemma4:31b"));
+
+  const detectorCall = modelCalls.find((call) => call.messages?.some(({ role }) => role === "system"));
+  const generationCall = modelCalls.find((call) => !call.messages?.some(({ role }) => role === "system"));
+  assert.equal(detectorCall.messages[0].role, "system");
+  assert.match(detectorCall.messages[0].content, /STRICT cybersecurity prompt-injection detector/);
+  assert.match(detectorCall.messages[1].content, /Explain how a library catalog works/);
+  assert.equal(detectorCall.format, "json");
+  assert.equal(detectorCall.options.temperature, 0);
+  assert.equal(generationCall.messages[0].content, "Explain how a library catalog works.");
+  assert.equal(generationCall.keep_alive, undefined);
+  assert.equal(detectorCall.options.num_predict, undefined);
+  assert.deepEqual(generationCall.options, { num_predict: 160 });
+  assert.doesNotMatch(JSON.stringify(result.body), new RegExp(apiKey));
+});
+
+test("an Ollama API key cannot be configured with an unencrypted endpoint", () => {
+  assert.throws(
+    () => createApp({ ollamaBaseUrl: "https://ollama.com" }),
+    /PROMPTSHIELD_OLLAMA_MODEL must be set/
+  );
+  assert.throws(
+    () => createApp({
+      ollamaBaseUrl: "http://ollama.example",
+      ollamaApiKey: "test-key",
+      ollamaModel: "gemma4:31b",
+    }),
+    /requires an HTTPS Ollama base URL/
+  );
 });
 
 test("staged replay is blocked before any Ollama call for the replay turn", async (t) => {

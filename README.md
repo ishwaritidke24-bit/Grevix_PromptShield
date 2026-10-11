@@ -1,6 +1,6 @@
 # PromptShield — The Forbidden Archive
 
-PromptShield is a local prompt-injection security demo with an atmospheric archive UI. It checks each prompt with a fast rule detector, an Ollama-based AI detector, and a bounded multi-turn sequence analyzer before returning a response from the local model.
+PromptShield is a prompt-injection security demo with an atmospheric archive UI. It checks each prompt with a fast rule detector, an Ollama-based AI detector, and a bounded multi-turn sequence analyzer before returning a response from the configured Ollama model.
 
 The interface displays the backend's actual decision, risk scores, and returned evidence. Its Intrusion Ritual and Safe Passage experiences submit real requests; they do not simulate security results.
 
@@ -8,9 +8,9 @@ The interface displays the backend's actual decision, risk scores, and returned 
 
 - Node.js 18 or newer (the server uses Node's built-in `fetch`)
 - npm
-- [Ollama](https://ollama.com/) running locally with the `qwen3:4b` model available
+- For local development, [Ollama](https://ollama.com/) running with the `qwen3:4b` model available
 
-The server currently uses the fixed Ollama endpoint `http://localhost:11434/api/generate` and model name `qwen3:4b`.
+By default, the server uses the local Ollama endpoint `http://localhost:11434/api/generate` and model name `qwen3:4b`. Both can be overridden with server-side environment variables; hosted Ollama endpoints use Ollama's `/api/chat` request and response format.
 
 ## Run locally
 
@@ -27,20 +27,40 @@ In another PowerShell window, from the project directory:
 
 ```powershell
 npm install
-node .\server.js
+npm start
 ```
 
 Open <http://localhost:5000/>. Check server health at <http://localhost:5000/health>.
 
-The server listens on port `5000`. Stop it with `Ctrl+C`.
+The server listens on port `5000` locally, or on the `PORT` supplied by a host. Stop it with `Ctrl+C`.
+
+## Deploy to Render
+
+Create a **Web Service** for this repository. Use the Node runtime, `npm install` as the build command, and `npm start` as the start command. Render supplies `PORT`; the server binds to `0.0.0.0` in production. Set `NODE_ENV` to `production` so session cookies use `Secure` and `SameSite=None`.
+
+Render cannot reach an Ollama process running on your development computer. Configure a hosted Ollama endpoint in the Render service's environment settings:
+
+| Variable | Required | Example / behavior |
+| --- | --- | --- |
+| `PROMPTSHIELD_OLLAMA_BASE_URL` | For hosted inference | `https://ollama.com` |
+| `PROMPTSHIELD_OLLAMA_API_KEY` | Yes for Ollama Cloud | Ollama Cloud API key; sent only in a server-side `Authorization: Bearer` header |
+| `PROMPTSHIELD_OLLAMA_MODEL` | Yes with a hosted base URL | A model ID enabled for your Ollama account, for example `gemma4:31b` if available; the local default is not assumed |
+| `AEGIS_ALLOWED_ORIGINS` | Only for a separate frontend origin | Comma-separated exact origins, such as `https://archive.example.com`; leave unset for the same-origin Render app |
+| `PROMPTSHIELD_OLLAMA_NUM_PREDICT` | Optional | Positive integer cap for answer generation only; unset preserves Ollama's default |
+
+When `PROMPTSHIELD_OLLAMA_BASE_URL` is configured, PromptShield calls that endpoint's `/api/chat` for both the AI detector and answer generation. Ollama Cloud uses chat `messages` and returns generated text in `message.content`; the API key is never sent to the browser. Choose a model that is available to your account and supports JSON output for the detector. The local default remains `/api/generate` with `qwen3:4b` when no hosted base URL is configured. Hosted services manage model residency, so the local `keep_alive` option is omitted for hosted requests.
+
+Do not set `AEGIS_ALLOWED_ORIGINS` to `*`: credentialed CORS requires explicit origins. If a separate frontend is used, include only its exact HTTPS origin. The built-in frontend is same-origin and does not require a CORS origin entry. Production cookies require HTTPS.
+
+Set secrets in Render's Environment dashboard, not in source control or frontend variables. `.env` files, installed dependencies, logs, and private key files are excluded by `.gitignore`. The sequence analyzer and anonymous session state are in memory; use a single running instance if conversation continuity across requests is required. A restart clears that transient state.
 
 ## Optional shorter demo responses
 
-By default, answer generation does not send an output-token limit; Ollama uses its normal generation behavior. To cap answer generation at 160 tokens for a demo, set this variable before starting the server:
+By default, answer generation does not send an output-token limit; Ollama uses its normal generation behavior. To cap answer generation at 160 tokens for a demo, set this variable before starting the server (or configure it in Render):
 
 ```powershell
 $env:PROMPTSHIELD_OLLAMA_NUM_PREDICT = '160'
-node .\server.js
+npm start
 ```
 
 This setting applies to answer generation, not the security detector. To restore the default behavior in the current PowerShell window:
@@ -50,6 +70,8 @@ Remove-Item Env:PROMPTSHIELD_OLLAMA_NUM_PREDICT -ErrorAction SilentlyContinue
 ```
 
 Restart the server after changing the variable. It is read when the server app is initialized.
+
+If Render fails to start with `PROMPTSHIELD_OLLAMA_NUM_PREDICT must be a positive integer`, open the service's **Environment** settings and either set the value to digits only (for example, `160`) or delete the variable to use Ollama's default generation behavior. Values such as `160 tokens`, `0`, or an unset-looking placeholder are invalid. Save the environment change and redeploy the service.
 
 ## How a chat request works
 
@@ -99,5 +121,6 @@ The test suite covers sequence analysis and server/API integration using mocked 
 ├── sequence-analyzer.js       # Bounded multi-turn security analysis
 ├── sequence-analyzer.test.js  # Sequence analyzer tests
 ├── server.js                  # Express API and Ollama integration
-└── server.integration.test.js # Server/API tests with mocked Ollama
+├── server.integration.test.js # Server/API tests with mocked Ollama
+└── .gitignore                 # Excludes local dependencies and secrets
 ```
