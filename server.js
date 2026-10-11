@@ -264,9 +264,26 @@ function riskLevel(score) {
 function createApp(options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const sequenceAnalyzer = options.sequenceAnalyzer ?? new SequenceAnalyzer();
-  const providerName = options.aiProvider
+  const configuredOllamaBaseUrl = options.ollamaBaseUrl
+    ?? process.env[OLLAMA_BASE_URL_ENV];
+  const configuredOllamaApiKey = options.ollamaApiKey
+    ?? process.env[OLLAMA_API_KEY_ENV];
+  const configuredOllamaModel = options.ollamaModel
+    ?? process.env[OLLAMA_MODEL_ENV];
+  const hasOllamaConfiguration = [
+    configuredOllamaBaseUrl,
+    configuredOllamaApiKey,
+    configuredOllamaModel,
+  ].some((value) => typeof value === "string" && value.trim() !== "");
+  const requestedProvider = options.aiProvider
     ?? process.env[AI_PROVIDER_ENV]
-    ?? "ollama";
+    ?? (process.env.NODE_ENV === "production" ? undefined : "ollama");
+  const providerName = hasOllamaConfiguration ? "ollama" : requestedProvider;
+  if (!providerName) {
+    throw new TypeError(
+      `Production requires hosted Ollama configuration or ${AI_PROVIDER_ENV}=gemini`
+    );
+  }
   let modelProvider;
   if (providerName === "gemini") {
     const apiKey = options.geminiApiKey ?? process.env[GEMINI_API_KEY_ENV];
@@ -288,19 +305,22 @@ function createApp(options = {}) {
       },
     };
   } else if (providerName === "ollama") {
-    const configuredOllamaBaseUrl = options.ollamaBaseUrl
-      ?? process.env[OLLAMA_BASE_URL_ENV];
     const usesChatApi = typeof configuredOllamaBaseUrl === "string"
       && configuredOllamaBaseUrl.trim() !== "";
-    const configuredOllamaModel = options.ollamaModel
-      ?? process.env[OLLAMA_MODEL_ENV];
+    if (process.env.NODE_ENV === "production" && !usesChatApi) {
+      throw new TypeError(`${OLLAMA_BASE_URL_ENV} must be set for production Ollama`);
+    }
     if (usesChatApi
         && (typeof configuredOllamaModel !== "string" || configuredOllamaModel.trim() === "")) {
       throw new TypeError(`${OLLAMA_MODEL_ENV} must be set when ${OLLAMA_BASE_URL_ENV} is configured`);
     }
     const ollamaModel = configuredOllamaModel?.trim() || DEFAULT_OLLAMA_MODEL;
-    const ollamaApiKey = options.ollamaApiKey
-      ?? process.env[OLLAMA_API_KEY_ENV];
+    const ollamaApiKey = configuredOllamaApiKey;
+    if (process.env.NODE_ENV === "production"
+        && usesChatApi
+        && (typeof ollamaApiKey !== "string" || ollamaApiKey.trim() === "")) {
+      throw new TypeError(`${OLLAMA_API_KEY_ENV} must be set for production Ollama`);
+    }
     let ollamaUrl = DEFAULT_OLLAMA_URL;
     if (usesChatApi) {
       let baseUrl;

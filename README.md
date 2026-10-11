@@ -10,7 +10,7 @@ The interface displays the backend's actual decision, risk scores, and returned 
 - npm
 - For local development, [Ollama](https://ollama.com/) running with `qwen3:4b`, or a configured hosted provider
 
-By default, the server uses the local Ollama endpoint `http://localhost:11434/api/generate` and model name `qwen3:4b`. On Render, set `PROMPTSHIELD_AI_PROVIDER=gemini` to use the Gemini API instead. Provider credentials stay server-side.
+By default, local development uses `http://localhost:11434/api/generate` and model `qwen3:4b`. Provider credentials stay server-side.
 
 ## Run locally
 
@@ -50,7 +50,7 @@ Render cannot reach an Ollama process running on your development computer. To u
 
 PromptShield uses Google's REST `generateContent` API for both detector and answer generation, passing the API key only in a request header. The detector uses Gemini's JSON response schema and validates the result before applying the existing security decision. If the detector response is invalid, the request fails rather than being treated as safe. The model ID and free-tier availability can change; verify the model and current quotas in AI Studio before setting it. Gemini's free tier has request limits and may use submitted content to improve Google's products, so don't send confidential prompts or secrets. Each allowed prompt uses two model calls (detector and answer); sequence-blocked prompts avoid those calls.
 
-To keep using Ollama Cloud instead, leave/set `PROMPTSHIELD_AI_PROVIDER=ollama` and configure `PROMPTSHIELD_OLLAMA_BASE_URL`, `PROMPTSHIELD_OLLAMA_API_KEY`, and `PROMPTSHIELD_OLLAMA_MODEL`. Ollama hosted requests use `/api/chat`; with no provider setting and no hosted base URL, local Ollama remains the default.
+Ollama hosted requests use `/api/chat`. When any `PROMPTSHIELD_OLLAMA_*` connection setting is present, hosted Ollama configuration takes precedence over a stale `PROMPTSHIELD_AI_PROVIDER=gemini`; invalid or incomplete Ollama settings fail instead of falling back to Gemini. In production, explicitly select `PROMPTSHIELD_AI_PROVIDER=gemini` with Gemini credentials to use Gemini, or configure all three Ollama variables above. Production never defaults to localhost Ollama. Without hosted configuration, local development still defaults to local Ollama.
 
 Do not set `AEGIS_ALLOWED_ORIGINS` to `*`: credentialed CORS requires explicit origins. If a separate frontend is used, include only its exact HTTPS origin. The built-in frontend is same-origin and does not require a CORS origin entry. Production cookies require HTTPS.
 
