@@ -1,6 +1,6 @@
 # PromptShield — The Forbidden Archive
 
-PromptShield is a prompt-injection security demo with an atmospheric archive UI. It checks each prompt with a fast rule detector, an Ollama-based AI detector, and a bounded multi-turn sequence analyzer before returning a response from the configured Ollama model.
+PromptShield is a prompt-injection security demo with an atmospheric archive UI. It checks each prompt with a fast rule detector, an AI-based detector, and a bounded multi-turn sequence analyzer before returning a response from the configured model provider.
 
 The interface displays the backend's actual decision, risk scores, and returned evidence. Its Intrusion Ritual and Safe Passage experiences submit real requests; they do not simulate security results.
 
@@ -8,9 +8,9 @@ The interface displays the backend's actual decision, risk scores, and returned 
 
 - Node.js 18 or newer (the server uses Node's built-in `fetch`)
 - npm
-- For local development, [Ollama](https://ollama.com/) running with the `qwen3:4b` model available
+- For local development, [Ollama](https://ollama.com/) running with `qwen3:4b`, or a configured hosted provider
 
-By default, the server uses the local Ollama endpoint `http://localhost:11434/api/generate` and model name `qwen3:4b`. Both can be overridden with server-side environment variables; hosted Ollama endpoints use Ollama's `/api/chat` request and response format.
+By default, the server uses the local Ollama endpoint `http://localhost:11434/api/generate` and model name `qwen3:4b`. On Render, set `PROMPTSHIELD_AI_PROVIDER=gemini` to use the Gemini API instead. Provider credentials stay server-side.
 
 ## Run locally
 
@@ -38,17 +38,19 @@ The server listens on port `5000` locally, or on the `PORT` supplied by a host. 
 
 Create a **Web Service** for this repository. Use the Node runtime, `npm install` as the build command, and `npm start` as the start command. Render supplies `PORT`; the server binds to `0.0.0.0` in production. Set `NODE_ENV` to `production` so session cookies use `Secure` and `SameSite=None`.
 
-Render cannot reach an Ollama process running on your development computer. Configure a hosted Ollama endpoint in the Render service's environment settings:
+Render cannot reach an Ollama process running on your development computer. To use Google's no-cost Gemini API tier, create an API key in [Google AI Studio](https://aistudio.google.com/api-keys) and configure these values in the Render service's **Environment** settings:
 
 | Variable | Required | Example / behavior |
 | --- | --- | --- |
-| `PROMPTSHIELD_OLLAMA_BASE_URL` | For hosted inference | `https://ollama.com` |
-| `PROMPTSHIELD_OLLAMA_API_KEY` | Yes for Ollama Cloud | Ollama Cloud API key; sent only in a server-side `Authorization: Bearer` header |
-| `PROMPTSHIELD_OLLAMA_MODEL` | Yes with a hosted base URL | A model ID enabled for your Ollama account, for example `gemma4:31b` if available; the local default is not assumed |
+| `PROMPTSHIELD_AI_PROVIDER` | Yes | `gemini` |
+| `PROMPTSHIELD_GEMINI_API_KEY` | Yes | Google AI Studio API key; sent only in a server-side `x-goog-api-key` header |
+| `PROMPTSHIELD_GEMINI_MODEL` | Yes | A model enabled on the free tier in your AI Studio account, for example `gemini-2.5-flash-lite` if it is available |
+| `PROMPTSHIELD_GENERATION_MAX_TOKENS` | Optional | Positive integer cap for answer generation; unset leaves the provider default |
 | `AEGIS_ALLOWED_ORIGINS` | Only for a separate frontend origin | Comma-separated exact origins, such as `https://archive.example.com`; leave unset for the same-origin Render app |
-| `PROMPTSHIELD_OLLAMA_NUM_PREDICT` | Optional | Positive integer cap for answer generation only; unset preserves Ollama's default |
 
-When `PROMPTSHIELD_OLLAMA_BASE_URL` is configured, PromptShield calls that endpoint's `/api/chat` for both the AI detector and answer generation. Ollama Cloud uses chat `messages` and returns generated text in `message.content`; the API key is never sent to the browser. Cloud inference does not enforce structured JSON output: PromptShield asks the detector for JSON in its instructions and validates the returned classification itself. Invalid JSON or missing/invalid detector fields fail the request with an error rather than being treated as safe. Choose a model available to your account that can follow the detector's JSON instruction. The local default remains `/api/generate` with `qwen3:4b` and its `format: "json"` option when no hosted base URL is configured. Hosted services manage model residency, so the local `keep_alive` option is omitted for hosted requests.
+PromptShield uses Google's REST `generateContent` API for both detector and answer generation, passing the API key only in a request header. The detector uses Gemini's JSON response schema and validates the result before applying the existing security decision. If the detector response is invalid, the request fails rather than being treated as safe. The model ID and free-tier availability can change; verify the model and current quotas in AI Studio before setting it. Gemini's free tier has request limits and may use submitted content to improve Google's products, so don't send confidential prompts or secrets. Each allowed prompt uses two model calls (detector and answer); sequence-blocked prompts avoid those calls.
+
+To keep using Ollama Cloud instead, leave/set `PROMPTSHIELD_AI_PROVIDER=ollama` and configure `PROMPTSHIELD_OLLAMA_BASE_URL`, `PROMPTSHIELD_OLLAMA_API_KEY`, and `PROMPTSHIELD_OLLAMA_MODEL`. Ollama hosted requests use `/api/chat`; with no provider setting and no hosted base URL, local Ollama remains the default.
 
 Do not set `AEGIS_ALLOWED_ORIGINS` to `*`: credentialed CORS requires explicit origins. If a separate frontend is used, include only its exact HTTPS origin. The built-in frontend is same-origin and does not require a CORS origin entry. Production cookies require HTTPS.
 
@@ -56,22 +58,23 @@ Set secrets in Render's Environment dashboard, not in source control or frontend
 
 ## Optional shorter demo responses
 
-By default, answer generation does not send an output-token limit; Ollama uses its normal generation behavior. To cap answer generation at 160 tokens for a demo, set this variable before starting the server (or configure it in Render):
+By default, answer generation does not send an output-token limit. To cap answer generation at 160 tokens for a demo, set the common provider setting (or configure it in Render):
 
 ```powershell
-$env:PROMPTSHIELD_OLLAMA_NUM_PREDICT = '160'
+$env:PROMPTSHIELD_GENERATION_MAX_TOKENS = '160'
 npm start
 ```
 
-This setting applies to answer generation, not the security detector. To restore the default behavior in the current PowerShell window:
+This setting applies to answer generation, not the security detector. To restore the provider's default behavior in the current PowerShell window:
 
 ```powershell
+Remove-Item Env:PROMPTSHIELD_GENERATION_MAX_TOKENS -ErrorAction SilentlyContinue
 Remove-Item Env:PROMPTSHIELD_OLLAMA_NUM_PREDICT -ErrorAction SilentlyContinue
 ```
 
 Restart the server after changing the variable. It is read when the server app is initialized.
 
-If Render fails to start with `PROMPTSHIELD_OLLAMA_NUM_PREDICT must be a positive integer`, open the service's **Environment** settings and either set the value to digits only (for example, `160`) or delete the variable to use Ollama's default generation behavior. Values such as `160 tokens`, `0`, or an unset-looking placeholder are invalid. Save the environment change and redeploy the service.
+If Render fails to start because a token limit must be a positive integer, set `PROMPTSHIELD_GENERATION_MAX_TOKENS` to digits only (for example, `160`) or remove it to use the provider default. The legacy `PROMPTSHIELD_OLLAMA_NUM_PREDICT` is still accepted for existing deployments. Values such as `160 tokens`, `0`, or an unset-looking placeholder are invalid.
 
 ## How a chat request works
 
@@ -79,8 +82,8 @@ The browser sends a JSON `POST /api/chat` request with a `prompt` and, for follo
 
 1. Checks known single-turn injection patterns.
 2. Updates the sequence analyzer and blocks immediately if sequence risk reaches the blocking threshold.
-3. Otherwise asks Ollama to classify the prompt as safe or malicious.
-4. Computes the existing risk decision; if allowed, asks Ollama to generate an answer.
+3. Otherwise asks the configured model provider to classify the prompt as safe or malicious.
+4. Computes the existing risk decision; if allowed, asks the provider to generate an answer.
 5. Returns the decision, available scores and detector evidence, conversation ID, and (when allowed) generated response.
 
 Example request body:
