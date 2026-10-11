@@ -112,7 +112,7 @@ test("the application serves the demonstration interface and assets without chan
   const health = await get("/health");
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), {
-    message: "AegisAI is running!",
+    message: "PromptShield is running!",
     security: "enabled",
   });
 });

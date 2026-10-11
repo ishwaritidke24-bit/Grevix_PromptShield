@@ -122,6 +122,26 @@
           <p id="demo-status" class="demo-status" role="status" aria-live="polite">Choose a mode or begin writing. Decisions are made by the server.</p>
         </section>
       </section>
+      <dialog id="manuscript-dialog" class="manuscript-dialog" aria-labelledby="manuscript-dialog-title">
+        <article class="page-reveal">
+          <button id="close-manuscript" class="page-close" type="button" aria-label="Return manuscript to the archive">×</button>
+          <p class="overline">RECOVERED MANUSCRIPT · <span id="reveal-turn">TURN 01</span></p>
+          <h2 id="manuscript-dialog-title">A page from the Archive</h2>
+          <blockquote id="reveal-prompt"></blockquote>
+          <div class="reveal-decision"><span>BACKEND DECISION</span><b id="reveal-status">—</b></div>
+          <p id="reveal-response" class="reveal-response" hidden></p>
+          <dl class="reveal-scores">
+            <div><dt>Single-turn risk</dt><dd id="reveal-single">—</dd></div>
+            <div><dt>Sequence risk</dt><dd id="reveal-sequence">—</dd></div>
+            <div><dt>Effective risk</dt><dd id="reveal-effective">—</dd></div>
+          </dl>
+          <section class="reveal-evidence-section" aria-label="Backend evidence">
+            <h3>Returned evidence</h3>
+            <ul id="reveal-evidence" class="reveal-evidence"></ul>
+          </section>
+          <button id="return-manuscript" class="return-manuscript" type="button">Return page to the Archive</button>
+        </article>
+      </dialog>
       <footer><span>PROMPTSHIELD <i>·</i> SEQUENCE-AWARE SECURITY</span><span>Local rules · Bounded memory · Real model decisions</span></footer>
     </main>
   </body>

@@ -129,6 +129,9 @@ function showEvidence(turn) {
   document.querySelectorAll(".manuscript").forEach((node) => {
     node.classList.toggle("selected", Number(node.dataset.turn) === turn.number);
   });
+  ui.messages.querySelectorAll(".chat-turn").forEach((node) => {
+    node.classList.toggle("selected", Number(node.dataset.turn) === turn.number);
+  });
   ui.threads.querySelectorAll(".evidence-thread").forEach((thread) => {
     thread.classList.toggle("selected-thread",
       Number(thread.dataset.from) === turn.number || Number(thread.dataset.to) === turn.number);
@@ -138,6 +141,47 @@ function showEvidence(turn) {
 function selectManuscript(turn) {
   showEvidence(turn);
   byId("ledger-content").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function revealManuscript(turn, card) {
+  selectManuscript(turn);
+  const data = turn.data || {};
+  byId("reveal-turn").textContent = `TURN ${String(turn.number).padStart(2, "0")}`;
+  byId("reveal-prompt").textContent = turn.prompt;
+  byId("reveal-status").textContent = turn.status.toUpperCase();
+  byId("reveal-status").dataset.status = turn.status;
+  byId("reveal-response").hidden = !(data.response || data.message);
+  byId("reveal-response").textContent = data.response || data.message || "";
+  byId("reveal-single").textContent = scoreText(data.singleTurnRiskScore);
+  byId("reveal-sequence").textContent = scoreText(data.sequenceRiskScore);
+  byId("reveal-effective").textContent = scoreText(data.effectiveRiskScore);
+  const evidence = byId("reveal-evidence");
+  evidence.replaceChildren();
+  const evidenceItems = [
+    ...(Array.isArray(data.matchedPatterns) ? data.matchedPatterns.map((item) => `Pattern · ${item}`) : []),
+    ...(Array.isArray(data.sequenceReasons) ? data.sequenceReasons : []),
+    ...(Array.isArray(data.reasons) ? data.reasons : []),
+    ...(typeof data.security?.aiDetector?.reason === "string" ? [data.security.aiDetector.reason] : []),
+  ].filter((item, index, items) => typeof item === "string" && item.trim() && items.indexOf(item) === index);
+  if (evidenceItems.length) {
+    evidenceItems.forEach((item) => textNode(evidence, "li", item));
+  } else {
+    textNode(evidence, "li", "No additional evidence returned");
+  }
+  const dialog = byId("manuscript-dialog");
+  dialog.returnFocus = card;
+  document.body.classList.add("manuscript-open");
+  dialog.showModal();
+  byId("close-manuscript").focus();
+}
+
+function closeManuscript() {
+  const dialog = byId("manuscript-dialog");
+  if (!dialog.open) return;
+  const returnFocus = dialog.returnFocus;
+  dialog.close();
+  document.body.classList.remove("manuscript-open");
+  returnFocus?.focus();
 }
 
 function createManuscript(turn) {
@@ -150,9 +194,20 @@ function createManuscript(turn) {
   glyph.setAttribute("aria-hidden", "true");
   textNode(node, "span", turn.prompt, "manuscript-preview");
   textNode(node, "span", turn.status, `manuscript-status ${turn.status}`);
-  node.addEventListener("click", () => selectManuscript(turn));
+  node.addEventListener("click", () => revealManuscript(turn, node));
   ui.constellation.append(node);
   return node;
+}
+
+let containmentTimer;
+function showContainmentPulse() {
+  window.clearTimeout(containmentTimer);
+  ui.scene.classList.remove("containment");
+  void ui.scene.offsetWidth;
+  ui.scene.classList.add("containment");
+  containmentTimer = window.setTimeout(() => {
+    ui.scene.classList.remove("containment");
+  }, 1100);
 }
 
 function drawEvidenceThreads() {
@@ -179,6 +234,16 @@ function drawEvidenceThreads() {
       line.setAttribute("class", "evidence-thread");
       line.dataset.from = String(reference);
       line.dataset.to = String(turn.number);
+      line.setAttribute("role", "button");
+      line.setAttribute("tabindex", "0");
+      line.setAttribute("aria-label", `Show evidence for turn ${turn.number}, linked to earlier turn ${reference}`);
+      line.addEventListener("click", () => selectManuscript(turn));
+      line.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectManuscript(turn);
+        }
+      });
       ui.threads.append(line);
     }
   }
@@ -187,22 +252,138 @@ function drawEvidenceThreads() {
 function renderChatTurn(turn) {
   byId("empty-state")?.remove();
   const row = document.createElement("article");
-  row.className = `chat-turn ${turn.status}`;
-  textNode(row, "span", `PAGE ${String(turn.number).padStart(2, "0")} · YOU`, "chat-meta");
-  textNode(row, "p", turn.prompt, "chat-prompt");
+  row.className = `chat-turn ${turn.status}${turn.status === "blocked" ? " blocked-entry" : ""} dealing`;
+  row.dataset.turn = String(turn.number);
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.setAttribute("aria-label", `Open page ${turn.number}. ${turn.status}. ${turn.prompt}`);
+  const card = document.createElement("div");
+  card.className = "chat-card";
+  const cardContent = document.createElement("div");
+  cardContent.className = "chat-card-content";
+  const header = document.createElement("div");
+  header.className = "chat-card-heading";
+  textNode(header, "span", "✧", "chat-card-sigil").setAttribute("aria-hidden", "true");
+  textNode(header, "span", `PAGE ${String(turn.number).padStart(2, "0")} · YOU`, "chat-meta");
+  textNode(cardContent, "span", "PROMPT INSCRIBED", "chat-card-label");
+  textNode(cardContent, "p", turn.prompt, "chat-prompt");
   const result = document.createElement("div");
   result.className = `chat-result ${turn.status}`;
-  textNode(result, "b", turn.status.toUpperCase(), "chat-decision");
+  const decision = textNode(result, "b", turn.status.toUpperCase(), "chat-decision");
+  decision.setAttribute("aria-label", `Backend decision: ${turn.status}`);
   if (turn.data.response) textNode(result, "p", turn.data.response, "chat-response");
   else if (turn.data.message) textNode(result, "p", turn.data.message, "chat-response");
-  const scores = [];
-  if ("singleTurnRiskScore" in turn.data) scores.push(`Single ${scoreText(turn.data.singleTurnRiskScore)}`);
-  if ("sequenceRiskScore" in turn.data) scores.push(`Sequence ${scoreText(turn.data.sequenceRiskScore)}`);
-  if ("effectiveRiskScore" in turn.data) scores.push(`Effective ${scoreText(turn.data.effectiveRiskScore)}`);
-  if (scores.length) textNode(result, "small", scores.join(" · "), "chat-scores");
-  row.append(result);
+  const scores = document.createElement("dl");
+  scores.className = "chat-scores";
+  [
+    ["Single-turn", "singleTurnRiskScore"],
+    ["Sequence", "sequenceRiskScore"],
+    ["Effective", "effectiveRiskScore"],
+  ].forEach(([label, key]) => {
+    if (!(key in turn.data)) return;
+    const score = document.createElement("div");
+    textNode(score, "dt", label);
+    textNode(score, "dd", scoreText(turn.data[key]));
+    scores.append(score);
+  });
+  cardContent.append(header, scores, result);
+  card.append(cardContent);
+  row.append(card);
+  const open = () => revealManuscript(turn, row);
+  row.addEventListener("click", (event) => {
+    if (window.getSelection()?.toString()) return;
+    if (event.target.closest("a,button,input,textarea,select")) return;
+    open();
+  });
+  row.addEventListener("keydown", (event) => {
+    if (event.target !== row || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    open();
+  });
+  row.addEventListener("animationend", (event) => {
+    if (event.target === row && event.animationName === "card-deal") row.classList.remove("dealing");
+  }, { once: true });
   ui.messages.append(row);
   ui.messages.scrollTop = ui.messages.scrollHeight;
+  window.setTimeout(() => row.classList.remove("dealing"), 950);
+}
+
+if (window.matchMedia("(hover: hover) and (pointer: fine)").matches
+  && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  let pointerFrame = 0;
+  let pendingPointer = null;
+  const clearCardMotion = () => {
+    ui.messages.querySelectorAll(".chat-card").forEach((card) => {
+      card.style.setProperty("--card-tilt-x", "0deg");
+      card.style.setProperty("--card-tilt-y", "0deg");
+      card.style.setProperty("--card-lift", "0px");
+      card.style.setProperty("--card-scale", "1");
+      card.style.setProperty("--card-magnet-x", "0px");
+      card.style.setProperty("--card-magnet-y", "0px");
+      card.style.setProperty("--shine-x", "50%");
+      card.style.setProperty("--shine-y", "50%");
+      card.classList.remove("pointer-over");
+    });
+  };
+  ui.messages.addEventListener("pointermove", (event) => {
+    if (document.body.classList.contains("motion-paused")) return;
+    pendingPointer = event;
+    if (pointerFrame) return;
+    pointerFrame = requestAnimationFrame(() => {
+      pointerFrame = 0;
+      const pointer = pendingPointer;
+      if (!pointer || document.body.classList.contains("motion-paused")) return;
+      const cards = ui.messages.querySelectorAll(".chat-card");
+      const cardBounds = [...cards].map((card) => ({ card, bounds: card.getBoundingClientRect() }));
+      cardBounds.forEach(({ card, bounds }) => {
+        const centerX = bounds.left + bounds.width / 2;
+        const centerY = bounds.top + bounds.height / 2;
+        const dx = pointer.clientX - centerX;
+        const dy = pointer.clientY - centerY;
+        const centerDistance = Math.hypot(dx, dy);
+        const gapX = Math.max(bounds.left - pointer.clientX, 0, pointer.clientX - bounds.right);
+        const gapY = Math.max(bounds.top - pointer.clientY, 0, pointer.clientY - bounds.bottom);
+        const edgeDistance = Math.hypot(gapX, gapY);
+        const influence = Math.max(0, 1 - edgeDistance / 190);
+        const isHovered = pointer.clientX >= bounds.left && pointer.clientX <= bounds.right
+          && pointer.clientY >= bounds.top && pointer.clientY <= bounds.bottom;
+        if (!influence && !isHovered) {
+          card.style.setProperty("--card-tilt-x", "0deg");
+          card.style.setProperty("--card-tilt-y", "0deg");
+          card.style.setProperty("--card-lift", "0px");
+          card.style.setProperty("--card-scale", "1");
+          card.style.setProperty("--card-magnet-x", "0px");
+          card.style.setProperty("--card-magnet-y", "0px");
+          card.classList.remove("pointer-over");
+          return;
+        }
+        const localX = (pointer.clientX - bounds.left) / bounds.width;
+        const localY = (pointer.clientY - bounds.top) / bounds.height;
+        const tiltStrength = isHovered ? 15 : 3.5 * influence;
+        const tiltX = isHovered ? (0.5 - localY) * tiltStrength * 2 : dy / Math.max(centerDistance, 1) * tiltStrength;
+        const tiltY = isHovered ? (localX - 0.5) * tiltStrength * 2 : dx / Math.max(centerDistance, 1) * tiltStrength;
+        const magnetic = isHovered ? 0 : influence * 9;
+        card.style.setProperty("--card-tilt-x", `${tiltX.toFixed(2)}deg`);
+        card.style.setProperty("--card-tilt-y", `${tiltY.toFixed(2)}deg`);
+        card.style.setProperty("--card-lift", isHovered ? "48px" : `${influence * 9}px`);
+        card.style.setProperty("--card-scale", isHovered ? "1.035" : `${1 + influence * 0.009}`);
+        card.style.setProperty("--card-magnet-x", `${(dx / Math.max(centerDistance, 1) * magnetic).toFixed(2)}px`);
+        card.style.setProperty("--card-magnet-y", `${(dy / Math.max(centerDistance, 1) * magnetic).toFixed(2)}px`);
+        card.style.setProperty("--shine-x", `${Math.max(0, Math.min(100, localX * 100)).toFixed(1)}%`);
+        card.style.setProperty("--shine-y", `${Math.max(0, Math.min(100, localY * 100)).toFixed(1)}%`);
+        card.classList.toggle("pointer-over", isHovered);
+      });
+    });
+  }, { passive: true });
+  ui.messages.addEventListener("pointerleave", () => {
+    pendingPointer = null;
+    if (pointerFrame) cancelAnimationFrame(pointerFrame);
+    pointerFrame = 0;
+    clearCardMotion();
+  });
+  byId("motion-toggle").addEventListener("click", () => {
+    if (document.body.classList.contains("motion-paused")) clearCardMotion();
+  });
 }
 
 function updateStatus(turn) {
@@ -269,8 +450,13 @@ async function submitPrompt(prompt) {
     updateStatus(turn);
     drawEvidenceThreads();
     showEvidence(turn);
-    if (turn.status === "blocked") ui.scene.classList.add("sealed");
-    else ui.scene.classList.remove("sealed");
+    if (turn.status === "blocked") {
+      ui.scene.classList.add("sealed");
+      showContainmentPulse();
+    } else {
+      ui.scene.classList.remove("sealed", "containment");
+      window.clearTimeout(containmentTimer);
+    }
     return { turn, response };
   } catch (error) {
     clearTimeout(requestTimeout);
@@ -304,6 +490,8 @@ function resetConversation(announce = true) {
   byId("turn-count").textContent = "0 pages";
   byId("volume-label").textContent = "VOLUME · UNOPENED";
   ui.scene.classList.remove("sealed");
+  ui.scene.classList.remove("containment");
+  window.clearTimeout(containmentTimer);
   ui.status.classList.remove("checking", "contained", "safe");
   ui.statusCopy.textContent = "Awaiting a real request";
   if (announce) {
@@ -431,3 +619,12 @@ byId("motion-toggle").addEventListener("click", (event) => {
   byId("motion-icon").textContent = paused ? "▶" : "Ⅱ";
 });
 window.addEventListener("resize", drawEvidenceThreads);
+
+byId("close-manuscript").addEventListener("click", closeManuscript);
+byId("return-manuscript").addEventListener("click", closeManuscript);
+byId("manuscript-dialog").addEventListener("click", (event) => {
+  if (event.target === event.currentTarget) closeManuscript();
+});
+byId("manuscript-dialog").addEventListener("close", () => {
+  document.body.classList.remove("manuscript-open");
+});

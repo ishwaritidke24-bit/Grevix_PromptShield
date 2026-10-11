@@ -280,7 +280,7 @@ function createApp(options = {}) {
 
   app.get("/health", (req, res) => {
     res.json({
-      message: "AegisAI is running!",
+      message: "PromptShield is running!",
       security: "enabled",
     });
   });
@@ -320,7 +320,7 @@ function createApp(options = {}) {
             aiBased: false,
           },
           reasons: sequence.reasons,
-          message: "AegisAI blocked this high-risk request.",
+          message: "PromptShield blocked this high-risk request.",
           conversationId,
           singleTurnRiskScore: null,
           sequenceRiskScore: sequence.riskScore,
@@ -346,7 +346,7 @@ function createApp(options = {}) {
             aiBased: securityResult.malicious,
           },
           reasons: risk.reasons,
-          message: "AegisAI blocked this high-risk request.",
+          message: "PromptShield blocked this high-risk request.",
           conversationId,
           singleTurnRiskScore: risk.score,
           sequenceRiskScore: sequence.riskScore,
@@ -401,10 +401,10 @@ function createApp(options = {}) {
         sequenceReasons: sequence.reasons,
       });
     } catch (error) {
-      console.error("AegisAI error:", error.message);
+      console.error("PromptShield error:", error.message);
 
       return res.status(500).json({
-        error: "AegisAI failed to process the request",
+        error: "PromptShield failed to process the request",
         details: error.message,
       });
     }
@@ -415,7 +415,7 @@ function createApp(options = {}) {
 
 if (require.main === module) {
   createApp().listen(5000, () => {
-    console.log("AegisAI running on http://localhost:5000");
+    console.log("PromptShield running on http://localhost:5000");
   });
 }
 
