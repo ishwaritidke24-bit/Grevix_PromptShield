@@ -79,6 +79,7 @@ Return ONLY JSON in this structure:
     stream: false,
     think: false,
     format: "json",
+    keep_alive: "10m",
     options: {
       temperature: 0,
     },
@@ -216,6 +217,16 @@ function riskLevel(score) {
 function createApp(options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const sequenceAnalyzer = options.sequenceAnalyzer ?? new SequenceAnalyzer();
+  const configuredTokenLimit = options.generationTokenLimit
+    ?? process.env.PROMPTSHIELD_OLLAMA_NUM_PREDICT;
+  const generationTokenLimit = configuredTokenLimit === undefined
+    || configuredTokenLimit === ""
+    ? undefined
+    : Number(configuredTokenLimit);
+  if (generationTokenLimit !== undefined
+      && (!Number.isSafeInteger(generationTokenLimit) || generationTokenLimit <= 0)) {
+    throw new TypeError("PROMPTSHIELD_OLLAMA_NUM_PREDICT must be a positive integer");
+  }
   const ttlMs = options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS;
   const maxSessions = options.maxSessions ?? MAX_SESSIONS;
   const clock = options.clock ?? Date.now;
@@ -355,6 +366,10 @@ function createApp(options = {}) {
           model: MODEL,
           prompt,
           stream: false,
+          keep_alive: "10m",
+          ...(generationTokenLimit === undefined
+            ? {}
+            : { options: { num_predict: generationTokenLimit } }),
         }),
       });
 

@@ -79,6 +79,7 @@ test("single-turn injection remains blocked and existing blocked fields remain",
   assert.equal(typeof result.body.sequenceRiskScore, "number");
   assert.equal(modelCalls.length, 1);
   assert.ok(modelCalls[0].system);
+  assert.equal(modelCalls[0].keep_alive, "10m");
 });
 
 test("the application serves the demonstration interface and assets without changing the chat API", async (t) => {
@@ -130,6 +131,35 @@ test("benign chat succeeds, preserves response contract, and adds no model call"
   assert.equal(modelCalls.length, 2);
   assert.equal(modelCalls.filter((call) => call.system).length, 1);
   assert.equal(modelCalls.filter((call) => !call.system).length, 1);
+  assert.ok(modelCalls.every((call) => call.keep_alive === "10m"));
+  const detectorCall = modelCalls.find((call) => call.system);
+  const generationCall = modelCalls.find((call) => !call.system);
+  assert.equal(detectorCall.options.temperature, 0);
+  assert.equal(generationCall.options, undefined);
+});
+
+test("configured generation token limit is sent only to the answer request", async (t) => {
+  const previousLimit = process.env.PROMPTSHIELD_OLLAMA_NUM_PREDICT;
+  process.env.PROMPTSHIELD_OLLAMA_NUM_PREDICT = "160";
+  try {
+    const { post, modelCalls } = await startTestServer(t);
+    const result = await post("Give a short explanation of model safety.");
+    assert.equal(result.response.status, 200);
+
+    const detectorCall = modelCalls.find((call) => call.system);
+    const generationCall = modelCalls.find((call) => !call.system);
+    assert.equal(detectorCall.keep_alive, "10m");
+    assert.equal(detectorCall.options.temperature, 0);
+    assert.equal(detectorCall.options.num_predict, undefined);
+    assert.equal(generationCall.keep_alive, "10m");
+    assert.deepEqual(generationCall.options, { num_predict: 160 });
+  } finally {
+    if (previousLimit === undefined) {
+      delete process.env.PROMPTSHIELD_OLLAMA_NUM_PREDICT;
+    } else {
+      process.env.PROMPTSHIELD_OLLAMA_NUM_PREDICT = previousLimit;
+    }
+  }
 });
 
 test("staged replay is blocked before any Ollama call for the replay turn", async (t) => {
