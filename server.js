@@ -85,7 +85,6 @@ Return ONLY JSON in this structure:
       ],
       stream: false,
       think: false,
-      format: "json",
       options: { temperature: 0 },
     }
     : {
@@ -111,37 +110,40 @@ Return ONLY JSON in this structure:
 
   const data = await response.json();
 
+  const detectorResponse = ollama.usesChatApi
+    ? data.message?.content
+    : data.response;
+  let result;
   try {
-    const detectorResponse = ollama.usesChatApi
-      ? data.message?.content
-      : data.response;
-    const result = JSON.parse(detectorResponse);
-
-    // Handle the structure Qwen returned earlier
-    if (result.analysis) {
-      return {
-        malicious: Boolean(result.analysis.is_malicious),
-        confidence: Number(result.analysis.confidence) || 0,
-        reason: result.analysis.reason || "No reason provided",
-      };
-    }
-
-    // Handle our expected structure
-    return {
-      malicious: Boolean(result.malicious),
-      confidence: Number(result.confidence) || 0,
-      reason: result.reason || "No reason provided",
-    };
-  } catch (error) {
-    console.error("Invalid detector JSON returned by Ollama");
-
-    // Fail closed
-    return {
-      malicious: true,
-      confidence: 0,
-      reason: "Security detector returned an invalid response.",
-    };
+    result = JSON.parse(detectorResponse);
+  } catch {
+    throw new Error("Ollama detector returned invalid JSON");
   }
+
+  const classification = result?.analysis
+    ? {
+      malicious: result.analysis.is_malicious,
+      confidence: result.analysis.confidence,
+      reason: result.analysis.reason,
+    }
+    : result;
+  if (!classification
+      || typeof classification !== "object"
+      || typeof classification.malicious !== "boolean"
+      || typeof classification.confidence !== "number"
+      || !Number.isFinite(classification.confidence)
+      || classification.confidence < 0
+      || classification.confidence > 1
+      || typeof classification.reason !== "string"
+      || classification.reason.trim() === "") {
+    throw new Error("Ollama detector returned an invalid response");
+  }
+
+  return {
+    malicious: classification.malicious,
+    confidence: classification.confidence,
+    reason: classification.reason,
+  };
 }
 
 // Risk scoring
